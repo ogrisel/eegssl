@@ -226,8 +226,8 @@ from tensorflow_addons.layers import GELU
 
 def make_encoder_model(
     n_blocks=5,
-    base_filters=8,
-    activation="relu",
+    base_filters=16,
+    activation="gelu",
     kernel_size=11,
     pool_strides=3,
     dilation_rate=2,
@@ -268,8 +268,8 @@ class PairModel(tf.keras.models.Model):
     def __init__(
         self,
         n_blocks=5,
-        base_filters=8,
-        activation="relu",
+        base_filters=16,
+        activation="gelu",
         kernel_size=11,
         pool_strides=3,
         dilation_rate=2,
@@ -337,6 +337,6 @@ model.evaluate(ds_pairs_test.batch(32).take(1000))
 
 
 # %%
-tf.saved_model.save(model, "third_model.tf")
+tf.saved_model.save(model, "fourth_model.tf")
 
 # %%
