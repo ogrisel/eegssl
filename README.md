@@ -2,7 +2,7 @@
 
 Experiments on Self-Supervised Learning on EEG data
 
-This is a partial and independent reproduction of the "relative 
+This is a partial and independent replication of the "relative 
 positioning" (RP) pretext task of:
 
 - *Self-supervised representation learning from electroencephalography signals*
