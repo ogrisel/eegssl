@@ -10,11 +10,12 @@ from tensorflow.keras.layers import concatenate
 
 def make_encoder_model(
     input_shape,
-    n_blocks=3,
-    base_filters=64,
-    kernel_size=11,
-    pool_strides=5,
-    dilation_rate=2,
+    n_blocks=6,
+    base_filters=8,
+    kernel_size=5,
+    pool_strides=3,
+    dilation_rate=1,
+    hidden_size=256,
 ):
     filters = base_filters
     model = Sequential()
@@ -41,11 +42,11 @@ class PairModel(tf.keras.models.Model):
     def __init__(
         self,
         input_shape,
-        n_blocks=3,
-        base_filters=64,
-        kernel_size=11,
-        pool_strides=5,
-        dilation_rate=2,
+        n_blocks=6,
+        base_filters=8,
+        kernel_size=5,
+        pool_strides=3,
+        dilation_rate=1,
         hidden_size=256,
     ):
         super().__init__()
