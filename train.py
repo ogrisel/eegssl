@@ -5,44 +5,22 @@
 from time import time
 import tensorflow as tf
 import matplotlib.pyplot as plt  # noqa
-import mne
-from mne.datasets.sleep_physionet.age import fetch_data
 
 from eegssl.data_loader import PairGenerator
+from eegssl.data_loader import RawPhysionetLoader
 from eegssl.model import PairModel
-
-
-def fetch_raw_physionet_data(verbose=None):
-    sleep_physionet_train = fetch_data(subjects=range(15), verbose=verbose)
-    sleep_physionet_test = fetch_data(subjects=range(15, 20), verbose=verbose)
-
-    mapping = {
-        "EOG horizontal": "eog",
-        "Resp oro-nasal": "misc",
-        "EMG submental": "misc",
-        "Temp rectal": "misc",
-        "Event marker": "misc",
-    }
-    raw_train, raw_test = [], []
-    for raw_data, filenames in [
-        (raw_train, sleep_physionet_train),
-        (raw_test, sleep_physionet_test),
-    ]:
-        for psg_file, hypnogram_file in filenames:
-            raw_edf = mne.io.read_raw_edf(psg_file)
-            raw_edf.set_annotations(mne.read_annotations(hypnogram_file))
-            raw_edf.set_channel_types(mapping)
-            raw_data.append(raw_edf)
-    return raw_train, raw_test
-
-
-raw_train, raw_test = fetch_raw_physionet_data(verbose=0)
 
 
 # %%
 print("Loading data...")
-pair_gen_train = PairGenerator(raw_train, pairs_per_chunk=1000, preload=False)
-pair_gen_test = PairGenerator(raw_test, pairs_per_chunk=1000, preload=False)
+physionet_loader = RawPhysionetLoader()
+
+pair_gen_train = PairGenerator(
+    physionet_loader.load(split="train"), pairs_per_chunk=100, preload=False
+)
+pair_gen_test = PairGenerator(
+    physionet_loader.load(split="test"), pairs_per_chunk=100, preload=False
+)
 
 
 # %%
@@ -62,13 +40,7 @@ print("Loading a fixed validation set in GPU memory")
 
 with tf.device("/GPU:0"):
     # Fixed validation set, preloaded in GPU memory
-    validation_data = next(
-        iter(
-            ds_pairs_test.take(5 * pair_gen_test.pairs_per_chunk)
-            .shuffle(buffer_size=int(1e5))
-            .batch(10000)
-        )
-    )
+    validation_data = next(iter(ds_pairs_test.batch(10000)))
 
 
 # %%

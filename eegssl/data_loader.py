@@ -1,12 +1,71 @@
 from itertools import islice
 from time import time
+from pathlib import Path
 
 import numpy as np
 import tensorflow as tf
+import mne
+from mne.datasets.sleep_physionet.age import fetch_data
+from sklearn.model_selection import train_test_split
 
 
 # XXX: un-hardcode me!
 SAMPLING_FREQ = 100  # Hz
+
+
+class RawPhysionetLoader:
+
+    mapping = {
+        "EOG horizontal": "eog",
+        "Resp oro-nasal": "misc",
+        "EMG submental": "misc",
+        "Temp rectal": "misc",
+        "Event marker": "misc",
+    }
+
+    def __init__(
+        self,
+        test_subjects=0.25,
+        preprocessed_data_folder="preprocessed_physionet",
+        seed=0,
+    ):
+        self.data_folder = Path(preprocessed_data_folder)
+        self.data_folder.mkdir(exist_ok=True)
+        self.train_subject_ids, self.test_subject_ids = train_test_split(
+            range(20), random_state=seed,
+        )
+
+    def load(self, split="train"):
+        if split == "train":
+            subject_ids = self.train_subject_ids
+        elif split == "test":
+            subject_ids = self.test_subject_ids
+        else:
+            raise ValueError(f"Unkwnown split={split}")
+        return self.fetch_and_extract(self.data_folder, subject_ids)
+
+    def fetch_and_extract(self, data_folder, subject_ids):
+        prepared_filenames = []
+        orig_filenames = fetch_data(subject_ids)
+        for psg_file, _hypnogram_file in orig_filenames:
+            target_filename = Path(psg_file).name.replace(".edf", ".npy")
+            target_filename = data_folder / target_filename
+            prepared_filenames.append(target_filename)
+            if target_filename.exists():
+                continue
+
+            print("Loading PSG file with MNE...")
+            raw_edf = mne.io.read_raw_edf(psg_file)
+            raw_edf.set_channel_types(self.mapping)
+
+            eeg_array = raw_edf.get_data(picks="eeg")
+            eeg_array = np.ascontiguousarray(eeg_array.T, dtype=np.float32)
+            scale = eeg_array.std(axis=0).mean()
+            eeg_array /= scale
+
+            print(f"Saving scale EEG channel data to {target_filename}...")
+            np.save(target_filename, eeg_array, allow_pickle=False)
+        return prepared_filenames
 
 
 class PairGenerator:
@@ -14,7 +73,7 @@ class PairGenerator:
 
     def __init__(
         self,
-        edf_data_chunks,
+        data_chunks,
         window_size=30 * SAMPLING_FREQ,
         tau_pos=100 * SAMPLING_FREQ,
         tau_neg=100 * SAMPLING_FREQ,
@@ -26,7 +85,7 @@ class PairGenerator:
     ):
         if pos_overlap:
             assert tau_pos >= window_size
-        self.data_chunks = edf_data_chunks
+        self.data_chunks = data_chunks
         self.window_size = window_size
         self.tau_pos = tau_pos
         self.tau_neg = tau_neg
@@ -36,34 +95,23 @@ class PairGenerator:
         self.preload = preload
         self.scale = scale
         if self.preload:
-            self.all_chunks = [
-                self._load_eeg_chunk(i) for i in range(len(edf_data_chunks))
-            ]
+            self.all_chunks = [self._load_chunk(i) for i in range(len(data_chunks))]
             self.channel_size = self.all_chunks[0].shape[1]
         else:
-            self.channel_size = self._load_eeg_chunk(0).shape[1]
+            self.channel_size = self._load_chunk(0).shape[1]
 
-    def _load_eeg_chunk(self, chunk_idx):
-        eeg_chunk = self.data_chunks[chunk_idx].get_data(picks="eeg")
-        eeg_chunk = np.ascontiguousarray(
-            eeg_chunk.T, dtype=np.float32
-        )  # shape=(timesteps, channels)
-        if self.scale == "auto":
-            scale = eeg_chunk.std(axis=0).mean()
-            eeg_chunk /= scale
-        elif self.scale is not None:
-            eeg_chunk /= self.scale
-        return eeg_chunk
+    def _load_chunk(self, chunk_idx):
+        return np.load(self.data_chunks[chunk_idx])
 
     def _generate_pairs_metadata(self):
         rng = np.random.RandomState(self.seed)
         while True:
             chunk_idx = rng.randint(0, len(self.data_chunks))
             if self.preload:
-                eeg_chunk = self.all_chunks[chunk_idx]
+                chunk = self.all_chunks[chunk_idx]
             else:
-                eeg_chunk = self._load_eeg_chunk(chunk_idx)
-            chunk_length = eeg_chunk.shape[0]
+                chunk = self._load_chunk(chunk_idx)
+            chunk_length = chunk.shape[0]
 
             # Amortize the cost of data loading by generating a large
             # enough number of pairs.
@@ -74,14 +122,14 @@ class PairGenerator:
                 else:
                     a_start, b_start = self._generate_neg_pair_idx(rng, chunk_length)
                     label = 0
-                yield a_start, b_start, label, eeg_chunk
+                yield a_start, b_start, label, chunk
 
     def generate_pairs(self):
-        for a_start, b_start, label, eeg_chunk in self._generate_pairs_metadata():
+        for a_start, b_start, label, chunk in self._generate_pairs_metadata():
             yield (
                 (
-                    eeg_chunk[a_start : a_start + self.window_size],
-                    eeg_chunk[b_start : b_start + self.window_size],
+                    chunk[a_start : a_start + self.window_size],
+                    chunk[b_start : b_start + self.window_size],
                 ),
                 label,
             )
