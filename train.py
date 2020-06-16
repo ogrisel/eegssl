@@ -27,12 +27,8 @@ pair_gen_test = PairGenerator(
 print("Wrapping as a TensorFlow Dataset")
 
 with tf.device("/GPU:0"):
-    ds_pairs_train = pair_gen_train.to_tf_dataset().prefetch(
-        pair_gen_train.pairs_per_chunk * 2
-    )
-    ds_pairs_test = pair_gen_test.to_tf_dataset().prefetch(
-        pair_gen_test.pairs_per_chunk * 2
-    )
+    ds_pairs_train = pair_gen_train.to_tf_dataset()
+    ds_pairs_test = pair_gen_test.to_tf_dataset()
 
 
 # %%

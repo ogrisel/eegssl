@@ -1,5 +1,3 @@
-from itertools import islice
-from time import time
 from pathlib import Path
 
 import numpy as np
@@ -134,7 +132,7 @@ class PairGenerator:
                 label,
             )
 
-    def to_tf_dataset(self):
+    def to_tf_dataset(self, prefetch_factor=2):
         return tf.data.Dataset.from_generator(
             self.generate_pairs,
             output_types=((tf.float32, tf.float32), tf.int8),
@@ -145,7 +143,7 @@ class PairGenerator:
                 ),
                 (),
             ),
-        )
+        ).prefetch(prefetch_factor * self.pairs_per_chunk)
 
     def _generate_pos_pair_idx(self, rng, chunk_length):
         if self.pos_overlap:
@@ -174,31 +172,3 @@ class PairGenerator:
             f"Cannot sample negative pair: tau_neg={self.tau_neg}"
             f" is to large compared to chunk length: {chunk_length}"
         )
-
-
-def run_loader_bench(raw_data, pairs_per_chunk=1000, total_pairs=10000, preload=False):
-    print(f"{pairs_per_chunk=}, {total_pairs=}, {preload=}")
-    t0 = time()
-    pair_gen_train = PairGenerator(
-        raw_data, pairs_per_chunk=pairs_per_chunk, preload=preload
-    )
-    if preload:
-        total_bytes = sum(a.nbytes for a in pair_gen_train.all_chunks)
-    else:
-        total_bytes = 0
-    duration = time() - t0
-    print(
-        f"Init: {total_bytes / 1e6} MB in {duration:.1f} s:"
-        f" {total_bytes / duration / 1e6:.1f} MB/s"
-    )
-
-    total_bytes = 0
-    t0 = time()
-    for (a, b), _label in islice(pair_gen_train.generate_pairs(), total_pairs):
-        total_bytes += a.nbytes
-        total_bytes += b.nbytes
-    duration = time() - t0
-    print(
-        f"Pairs: {total_bytes / 1e6} MB in {duration:.1f} s:"
-        f" {total_bytes / duration / 1e6:.1f} MB/s"
-    )
