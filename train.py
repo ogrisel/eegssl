@@ -42,11 +42,11 @@ with tf.device("/GPU:0"):
 # %%
 with tf.device("/GPU:0"):
     model = PairModel(
-        n_blocks=6,
-        base_filters=8,
+        n_blocks=5,
+        base_filters=16,
         kernel_size=5,
         pool_strides=3,
-        dilation_rate=1,
+        dilation_rate=2,
         hidden_size=256,
         input_shape=(pair_gen_train.window_size, pair_gen_train.channel_size),
     )
