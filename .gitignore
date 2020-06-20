@@ -132,3 +132,6 @@ dmypy.json
 
 *.tf
 *.npy
+
+*.db
+checkpoints/
